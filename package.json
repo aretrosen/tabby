@@ -1,0 +1,26 @@
+{
+  "author": "aretrosen",
+  "name": "tabby",
+  "version": "1.0.0",
+  "description": "Proper Tab completion for CLI programs",
+  "main": "index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "terminal",
+    "tab",
+    "shell",
+    "completion",
+    "complete"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aretrosen/tabby.git"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.19",
+    "typescript": "^5.3.3"
+  }
+}
