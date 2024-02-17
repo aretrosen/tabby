@@ -16,7 +16,7 @@ const SHELL_TO_EXT: Record<string, string> = {
   fish: "fish",
 };
 
-export function getShell(shell: string | undefined): string {
+export function getShell(shell?: string): string {
   shell = shell?.trim();
   shell = shell || process.env.SHELL;
 
@@ -39,11 +39,11 @@ export function getShell(shell: string | undefined): string {
 
 export async function generateShellCompletion(
   name: string,
-  completer: string | undefined,
-  shell: string | undefined,
+  completer?: string,
+  shell?: string,
 ): Promise<string> {
-  completer = completer || "completion";
   shell = getShell(shell);
+  completer = completer || "completion";
 
   const templateScript = path.join(
     __dirname,

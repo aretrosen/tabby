@@ -12,6 +12,7 @@ export enum ArgType {
 }
 
 export class Completion {
+  public argValues: Record<string, any>;
   constructor(
     public completions: Record<string, any>,
     public aliases: Record<string, string>,
@@ -19,14 +20,26 @@ export class Completion {
   ) {
     Object.entries(aliases).forEach(([k, v]) => {
       typedOpts[k] = typedOpts[v] ?? ArgType.Boolean;
+      completions[k] = completions[v] ?? {};
     });
+    this.argValues = {};
   }
 
-  private _getCompletions(args: string[]): string | CompletionUnit[] {
+  private _getCompletions(
+    args: string[],
+    onlyOpts: boolean = false,
+  ): string | CompletionUnit[] {
     let parentObj = this.completions;
     for (const arg in args) {
       if (!(arg in parentObj)) return [];
       parentObj = parentObj[arg];
+    }
+    if (onlyOpts) {
+      const opts = parentObj["__opts"];
+      if (!Array.isArray(opts)) {
+        return [];
+      }
+      return opts.map((x) => ({ name: x }));
     }
     if (typeof parentObj === "string") {
       return parentObj;
@@ -71,36 +84,38 @@ export class Completion {
     });
   }
 
-  nextCompletions(shell: string, otherCompletions: CompletionUnit[]) {
+  public nextCompletions(shell: string, otherCompletions: CompletionUnit[]) {
     const line = process.env.COMP_LINE;
     if (!line) {
-      return { completions: {}, argVals: {} };
+      return {};
     }
     const parts = line.split(" ").slice(1);
     const partial = parts.at(-1) ?? "";
 
     let knownParts: string[] = [];
-    let argVals: Record<string, any> = {};
+    let optSatisfied = true;
 
     for (const part in parts.slice(0, -1)) {
       if (part in this.typedOpts) {
+        const typePart = this.typedOpts[part];
+        optSatisfied =
+          typePart === ArgType.Boolean || typePart === ArgType.Count;
         knownParts.push(part);
-        if (this.typedOpts[part] === ArgType.Count) {
-          argVals[part] = (argVals[part] || 0) + 1;
+        if (typePart === ArgType.Count) {
+          this.argValues[part] = (this.argValues[part] || 0) + 1;
         }
       } else if (knownParts.length !== 0 && part[0] !== "-") {
+        optSatisfied = true;
         const lastProcessed = knownParts.at(-1)!;
         const typeLastProcessed = this.typedOpts[lastProcessed];
         switch (typeLastProcessed) {
-          case ArgType.Boolean:
-            break;
           case ArgType.Number:
             let num = Number(part);
             if (Number.isNaN(num)) num = 0;
-            argVals[lastProcessed] = num;
+            this.argValues[lastProcessed] = num;
             break;
           case ArgType.String:
-            argVals[lastProcessed] = part;
+            this.argValues[lastProcessed] = part;
             break;
         }
       } else if (
@@ -109,13 +124,16 @@ export class Completion {
         part.slice(0, 1) in this.typedOpts &&
         this.typedOpts[part.slice(0, 1)] == ArgType.Count
       ) {
-        argVals[part[1]] = (argVals[part[1]] || 0) + part.length - 1;
+        optSatisfied = true;
+        knownParts.push(part);
+        this.argValues[part[1]] =
+          (this.argValues[part[1]] || 0) + part.length - 1;
       }
     }
 
-    const definedCompletions = this._getCompletions(knownParts);
+    const definedCompletions = this._getCompletions(knownParts, !optSatisfied);
     if (typeof definedCompletions === "string") {
-      return { completions: definedCompletions, argvals: argVals };
+      return definedCompletions;
     }
     let lines = this._stringifyCompletions(
       shell,
@@ -124,6 +142,6 @@ export class Completion {
     if (shell === "bash") {
       lines = lines.filter((arg) => arg.startsWith(partial));
     }
-    return { completions: lines, argvals: argVals };
+    return lines;
   }
 }
