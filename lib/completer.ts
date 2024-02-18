@@ -13,7 +13,8 @@ export class Completion {
   ) {
     Object.entries(aliases).forEach(([k, v]) => {
       typedOpts[k] = typedOpts[v];
-      completions[k] = completions[v] ?? {};
+      completions[v] ??= {};
+      completions[k] = completions[v];
     });
     this.argValues = new Map<string, any>();
   }
@@ -89,13 +90,13 @@ export class Completion {
     this.argValues["--"] = argSplit[1]?.split(" ");
 
     const argParts = argSplit[0].split(/[ =]+/).slice(1);
-    const partial = argParts.at(-1) ?? "";
+    const partial = argParts.pop() ?? "";
     const len = argParts.length;
 
     const pargs = new Set<string>();
     let compleOpt = false;
 
-    for (let i = 0; i < len - 1; ++i) {
+    for (let i = 0; i < len; ++i) {
       let parg = argParts[i];
       if (!parg.startsWith("-")) {
         if (parg in this.typedOpts) {
@@ -106,13 +107,13 @@ export class Completion {
         }
         continue;
       }
-      if (parg.startsWith("--") || parg.length == 2) {
+      if (parg.startsWith("--") || parg.length === 2) {
         const fntype = this.typedOpts[parg];
         if ((!fntype && !pargs.has(parg)) || fntype === Boolean) {
           this.argValues[parg] = true;
           this.typedOpts[parg] = Boolean;
         } else if (fntype === String || fntype === Number) {
-          if (i === len - 2) {
+          if (i === len - 1) {
             compleOpt = true;
             break;
           }
@@ -123,7 +124,7 @@ export class Completion {
         } else if (Array.isArray(fntype)) {
           const nfntype = fntype[0];
           this.argValues[parg] ??= [];
-          if (i === len - 2) {
+          if (i === len - 1) {
             compleOpt = true;
             break;
           }
@@ -157,7 +158,7 @@ export class Completion {
         if (this.typedOpts[k] === Boolean) {
           this.argValues[k] = true;
         } else {
-          this.argValues[k] = (this.argValues[k] ?? 0) + 1;
+          this.argValues[k] = (this.argValues[k] ?? 0) + v;
         }
       });
     }
