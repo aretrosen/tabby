@@ -97,9 +97,11 @@ export class Completion {
     // TODO: Another thing that can be done is not clearing everytime, and
     // compare with the previous line. To be implemented later.
     this.argValues.clear();
-    this.argValues["--"] = argSplit[1]?.split(" ");
+    this.argValues["--"] = argSplit[1]?.split(" ") || [];
 
     const argParts = argSplit[0].split(/[ =]+/).slice(1);
+    if (this.argValues["--"].length > 0 || argParts?.at(-1)! in this.typedOpts)
+      argParts.push("");
     const partial = argParts.pop() ?? "";
     const len = argParts.length;
 
