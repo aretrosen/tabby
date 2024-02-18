@@ -9,7 +9,8 @@
     "sourceMap": true,
     "lib": ["ES2022"],
     "types": ["node"],
-    "noEmit": true
+    "declaration": true,
+    "emitDeclarationOnly": true
   },
-  "include": ["index.ts", "lib/**/*"]
+  "include": ["index.ts"]
 }
