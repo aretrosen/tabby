@@ -4,25 +4,22 @@ export type CompletionUnit = {
   alias?: string;
 };
 
-export enum ArgType {
-  Boolean,
-  String,
-  Number,
-  Count,
-}
-
 export class Completion {
   public argValues: Record<string, any>;
   constructor(
     public completions: Record<string, any>,
     public aliases: Record<string, string>,
-    public typedOpts: Record<string, ArgType>,
+    public typedOpts: Record<string, Function | [Function]>,
   ) {
     Object.entries(aliases).forEach(([k, v]) => {
-      typedOpts[k] = typedOpts[v] ?? ArgType.Boolean;
+      typedOpts[k] = typedOpts[v];
       completions[k] = completions[v] ?? {};
     });
-    this.argValues = {};
+    this.argValues = new Map<string, any>();
+  }
+
+  public static Count(num?: number): number {
+    return (num ?? 0) + 1;
   }
 
   private _getCompletions(
@@ -84,54 +81,106 @@ export class Completion {
     });
   }
 
+  private _argProcessor(line: string) {
+    const argSplit = line.split(/ -- /);
+    // TODO: Another thing that can be done is not clearing everytime, and
+    // compare with the previous line. To be implemented later.
+    this.argValues.clear();
+    this.argValues["--"] = argSplit[1]?.split(" ");
+
+    const argParts = argSplit[0].split(/[ =]+/).slice(1);
+    const partial = argParts.at(-1) ?? "";
+    const len = argParts.length;
+
+    const pargs = new Set<string>();
+    let compleOpt = false;
+
+    for (let i = 0; i < len - 1; ++i) {
+      let parg = argParts[i];
+      if (!parg.startsWith("-")) {
+        if (parg in this.typedOpts) {
+          this.argValues[parg] = true;
+          pargs.add(parg);
+        } else {
+          this.argValues["--"].push(parg);
+        }
+        continue;
+      }
+      if (parg.startsWith("--") || parg.length == 2) {
+        const fntype = this.typedOpts[parg];
+        if ((!fntype && !pargs.has(parg)) || fntype === Boolean) {
+          this.argValues[parg] = true;
+          this.typedOpts[parg] = Boolean;
+        } else if (fntype === String || fntype === Number) {
+          if (i === len - 2) {
+            compleOpt = true;
+            break;
+          }
+          this.argValues[parg] = fntype(argParts[++i]);
+        } else if (!fntype || fntype === Completion.Count) {
+          this.argValues[parg] = Completion.Count(this.argValues[parg]);
+          this.typedOpts[parg] = Completion.Count;
+        } else if (Array.isArray(fntype)) {
+          const nfntype = fntype[0];
+          this.argValues[parg] ??= [];
+          if (i === len - 2) {
+            compleOpt = true;
+            break;
+          }
+          const collect = argParts[i + 1].split(",");
+          if (nfntype === Number && collect.length <= 1) {
+            while (i < len - 2 && !Number.isNaN(Number(argParts[i + 1]))) {
+              this.argValues[parg].push(argParts[++i]);
+            }
+          } else {
+            this.argValues[parg].concat(collect.map((item) => nfntype(item)));
+          }
+        }
+        pargs.add(parg);
+        continue;
+      }
+      const p0 = parg.slice(0, 2);
+      if (
+        this.typedOpts[p0] === Number ||
+        !Number.isNaN(Number(parg.slice(2)))
+      ) {
+        this.argValues[p0] = Number(parg.slice(2));
+        continue;
+      }
+      const splChar = [...parg.slice(1)].reduce(
+        (res, char) => (
+          res.set(`-${char}`, (res.get(`-${char}`) ?? 0) + 1), res
+        ),
+        new Map<string, number>(),
+      );
+      splChar.forEach((v, k) => {
+        if (this.typedOpts[k] === Boolean) {
+          this.argValues[k] = true;
+        } else {
+          this.argValues[k] = (this.argValues[k] ?? 0) + 1;
+        }
+      });
+    }
+    return {
+      processedArgs: Array.from(pargs),
+      partArg: partial,
+      completeOpt: compleOpt,
+    };
+  }
+
   public nextCompletions(shell: string, otherCompletions: CompletionUnit[]) {
     const line = process.env.COMP_LINE;
     if (!line) {
       return {};
     }
-    const parts = line.split(" ").slice(1);
-    const partial = parts.at(-1) ?? "";
 
-    let knownParts: string[] = [];
-    let optSatisfied = true;
+    const {
+      processedArgs: knownParts,
+      partArg: partial,
+      completeOpt,
+    } = this._argProcessor(line);
 
-    for (const part in parts.slice(0, -1)) {
-      if (part in this.typedOpts) {
-        const typePart = this.typedOpts[part];
-        optSatisfied =
-          typePart === ArgType.Boolean || typePart === ArgType.Count;
-        knownParts.push(part);
-        if (typePart === ArgType.Count) {
-          this.argValues[part] = (this.argValues[part] || 0) + 1;
-        }
-      } else if (knownParts.length !== 0 && part[0] !== "-") {
-        optSatisfied = true;
-        const lastProcessed = knownParts.at(-1)!;
-        const typeLastProcessed = this.typedOpts[lastProcessed];
-        switch (typeLastProcessed) {
-          case ArgType.Number:
-            let num = Number(part);
-            if (Number.isNaN(num)) num = 0;
-            this.argValues[lastProcessed] = num;
-            break;
-          case ArgType.String:
-            this.argValues[lastProcessed] = part;
-            break;
-        }
-      } else if (
-        knownParts.length !== 0 &&
-        part[0] === "-" &&
-        part.slice(0, 1) in this.typedOpts &&
-        this.typedOpts[part.slice(0, 1)] == ArgType.Count
-      ) {
-        optSatisfied = true;
-        knownParts.push(part);
-        this.argValues[part[1]] =
-          (this.argValues[part[1]] || 0) + part.length - 1;
-      }
-    }
-
-    const definedCompletions = this._getCompletions(knownParts, !optSatisfied);
+    const definedCompletions = this._getCompletions(knownParts, completeOpt);
     if (typeof definedCompletions === "string") {
       return definedCompletions;
     }
