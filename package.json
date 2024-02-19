@@ -5,7 +5,8 @@
   "description": "Proper Tab completion for CLI programs",
   "main": "index.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "lint": "oxlint index.ts",
+    "build": "tsc --build"
   },
   "keywords": [
     "terminal",

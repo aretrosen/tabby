@@ -157,7 +157,9 @@ export class Completion {
         this.typedOpts[p0] === Number ||
         !Number.isNaN(Number(parg.slice(2)))
       ) {
+        pargs.add(p0);
         this.argValues[p0] = Number(parg.slice(2));
+        this.typedOpts[p0] = Number;
         continue;
       }
       const splChar = [...parg.slice(1)].reduce(
@@ -167,10 +169,13 @@ export class Completion {
         new Map<string, number>(),
       );
       splChar.forEach((v, k) => {
-        if (this.typedOpts[k] === Boolean) {
+        pargs.add(k);
+        if (this.typedOpts[k] === Boolean || v === 1) {
           this.argValues[k] = true;
+          this.typedOpts[k] = Boolean;
         } else {
           this.argValues[k] = (this.argValues[k] ?? 0) + v;
+          this.typedOpts[k] = Completion.Count;
         }
       });
     }
